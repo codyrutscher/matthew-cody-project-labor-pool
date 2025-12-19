@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
@@ -15,9 +15,13 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { name, email, password, officeName } = registerSchema.parse(body);
 
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
+    // Check if user exists
+    const { data: existingUser } = await supabase
+      .schema("catering")
+      .from("User")
+      .select("id")
+      .eq("email", email)
+      .single();
 
     if (existingUser) {
       return NextResponse.json({ error: "Email already registered" }, { status: 400 });
@@ -25,20 +29,42 @@ export async function POST(req: Request) {
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    const office = await prisma.office.create({
-      data: {
+    // Create office
+    const { data: office, error: officeError } = await supabase
+      .schema("catering")
+      .from("Office")
+      .insert({
         name: officeName,
-        users: {
-          create: {
-            name,
-            email,
-            password: hashedPassword,
-            role: "MANAGER",
-          },
-        },
-      },
-      include: { users: true },
-    });
+        timezone: "America/New_York",
+      })
+      .select()
+      .single();
+
+    if (officeError) {
+      console.error("Office creation error:", officeError);
+      return NextResponse.json({ error: "Failed to create office" }, { status: 500 });
+    }
+
+    // Create user
+    const { data: user, error: userError } = await supabase
+      .schema("catering")
+      .from("User")
+      .insert({
+        name,
+        email,
+        password: hashedPassword,
+        role: "MANAGER",
+        officeId: office.id,
+      })
+      .select()
+      .single();
+
+    if (userError) {
+      console.error("User creation error:", userError);
+      // Rollback office creation
+      await supabase.schema("catering").from("Office").delete().eq("id", office.id);
+      return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
+    }
 
     return NextResponse.json({
       message: "Registration successful",
