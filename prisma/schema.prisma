@@ -4,18 +4,23 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  schemas  = ["catering"]
 }
 
 enum UserRole {
   ADMIN
   MANAGER
   STAFF
+
+  @@schema("catering")
 }
 
 enum SubscriptionStatus {
   ACTIVE
   PAUSED
   CANCELLED
+
+  @@schema("catering")
 }
 
 enum OrderStatus {
@@ -24,6 +29,8 @@ enum OrderStatus {
   RSVP_CLOSED
   CONFIRMED
   DELIVERED
+
+  @@schema("catering")
 }
 
 model Account {
@@ -42,6 +49,7 @@ model Account {
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@schema("catering")
 }
 
 model Session {
@@ -50,6 +58,8 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@schema("catering")
 }
 
 model VerificationToken {
@@ -58,6 +68,7 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+  @@schema("catering")
 }
 
 model User {
@@ -75,6 +86,8 @@ model User {
   rsvps         RSVP[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+
+  @@schema("catering")
 }
 
 model Office {
@@ -91,6 +104,8 @@ model Office {
   orders              Order[]
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
+
+  @@schema("catering")
 }
 
 model Subscription {
@@ -104,6 +119,8 @@ model Subscription {
   currentPeriodEnd     DateTime?
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
+
+  @@schema("catering")
 }
 
 model CuisineType {
@@ -113,6 +130,8 @@ model CuisineType {
   imageUrl    String?
   menus       Menu[]
   createdAt   DateTime @default(now())
+
+  @@schema("catering")
 }
 
 model CulturalCelebration {
@@ -123,8 +142,9 @@ model CulturalCelebration {
   cuisineType String?
   menus       Menu[]
   createdAt   DateTime @default(now())
-}
 
+  @@schema("catering")
+}
 
 model Menu {
   id                    String               @id @default(cuid())
@@ -140,37 +160,42 @@ model Menu {
   updatedAt             DateTime             @updatedAt
 
   @@unique([weekOf, cuisineTypeId])
+  @@schema("catering")
 }
 
 model MenuItem {
-  id           String   @id @default(cuid())
-  menuId       String
-  menu         Menu     @relation(fields: [menuId], references: [id], onDelete: Cascade)
-  name         String
-  description  String?  @db.Text
-  price        Float
-  dietaryTags  String[]
-  imageUrl     String?
-  available    Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(cuid())
+  menuId      String
+  menu        Menu     @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  name        String
+  description String?  @db.Text
+  price       Float
+  dietaryTags String[]
+  imageUrl    String?
+  available   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@schema("catering")
 }
 
 model Order {
-  id          String      @id @default(cuid())
-  officeId    String
-  office      Office      @relation(fields: [officeId], references: [id])
-  menuId      String
-  menu        Menu        @relation(fields: [menuId], references: [id])
-  status      OrderStatus @default(DRAFT)
-  totalCost   Float?
+  id           String      @id @default(cuid())
+  officeId     String
+  office       Office      @relation(fields: [officeId], references: [id])
+  menuId       String
+  menu         Menu        @relation(fields: [menuId], references: [id])
+  status       OrderStatus @default(DRAFT)
+  totalCost    Float?
   rsvpDeadline DateTime?
-  rsvpToken   String?     @unique
-  items       OrderItem[]
-  rsvps       RSVP[]
-  notes       String?     @db.Text
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  rsvpToken    String?     @unique
+  items        OrderItem[]
+  rsvps        RSVP[]
+  notes        String?     @db.Text
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@schema("catering")
 }
 
 model OrderItem {
@@ -182,6 +207,8 @@ model OrderItem {
   price      Float
   quantity   Int      @default(1)
   createdAt  DateTime @default(now())
+
+  @@schema("catering")
 }
 
 model RSVP {
@@ -195,4 +222,5 @@ model RSVP {
   submittedAt   DateTime @default(now())
 
   @@unique([orderId, userId])
+  @@schema("catering")
 }
