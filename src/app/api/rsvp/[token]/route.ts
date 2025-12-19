@@ -112,6 +112,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       rsvp = data;
     } else {
       // Create new RSVP
+      const now = new Date().toISOString();
       const { data, error } = await supabase
         .from("RSVP")
         .insert({
@@ -120,6 +121,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
           userId: session.user.id,
           selectedItems,
           dietaryNotes,
+          submittedAt: now,
+          createdAt: now,
+          updatedAt: now,
         })
         .select()
         .single();

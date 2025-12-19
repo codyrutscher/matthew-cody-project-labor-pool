@@ -59,6 +59,7 @@ export async function POST(req: Request) {
     const tempPassword = randomBytes(16).toString("hex");
     const hashedPassword = await bcrypt.hash(tempPassword, 12);
 
+    const now = new Date().toISOString();
     const { data: user, error } = await supabase
       .from("User")
       .insert({
@@ -67,6 +68,8 @@ export async function POST(req: Request) {
         password: hashedPassword,
         role: "STAFF",
         officeId: session.user.officeId,
+        createdAt: now,
+        updatedAt: now,
       })
       .select("id, email")
       .single();

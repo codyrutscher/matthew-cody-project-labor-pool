@@ -31,6 +31,7 @@ export async function POST(req: Request) {
     const totalCost = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const rsvpToken = randomBytes(32).toString("hex");
     const orderId = randomUUID();
+    const now = new Date().toISOString();
 
     // Create order
     const { data: order, error: orderError } = await supabase
@@ -42,6 +43,8 @@ export async function POST(req: Request) {
         totalCost,
         rsvpToken,
         status: "DRAFT",
+        createdAt: now,
+        updatedAt: now,
       })
       .select()
       .single();
@@ -59,6 +62,8 @@ export async function POST(req: Request) {
       name: item.name,
       price: item.price,
       quantity: item.quantity,
+      createdAt: now,
+      updatedAt: now,
     }));
 
     const { data: createdItems, error: itemsError } = await supabase

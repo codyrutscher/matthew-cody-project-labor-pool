@@ -30,6 +30,7 @@ export async function POST(req: Request) {
     const hashedPassword = await bcrypt.hash(password, 12);
     const officeId = randomUUID();
     const userId = randomUUID();
+    const now = new Date().toISOString();
 
     // Create office
     const { data: office, error: officeError } = await supabase
@@ -38,6 +39,8 @@ export async function POST(req: Request) {
         id: officeId,
         name: officeName,
         timezone: "America/New_York",
+        createdAt: now,
+        updatedAt: now,
       })
       .select()
       .single();
@@ -57,6 +60,8 @@ export async function POST(req: Request) {
         password: hashedPassword,
         role: "MANAGER",
         officeId: office.id,
+        createdAt: now,
+        updatedAt: now,
       })
       .select()
       .single();
