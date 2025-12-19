@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,38 +8,78 @@ import { Calendar, DollarSign, Users, UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
 import { format, startOfWeek, addWeeks } from "date-fns";
 
+interface Office {
+  id: string;
+  name: string;
+  budgetLimit: number | null;
+  Subscription: unknown | null;
+}
+
+interface Order {
+  id: string;
+  status: string;
+  rsvpDeadline: string | null;
+  Menu: {
+    weekOf: string;
+    CuisineType: { name: string };
+  };
+  RSVP: { id: string }[];
+}
+
+interface Menu {
+  id: string;
+  weekOf: string;
+  CuisineType: { name: string };
+  CulturalCelebration: { name: string } | null;
+}
+
 async function getDashboardData(officeId: string) {
   const now = new Date();
   const thisWeekStart = startOfWeek(now, { weekStartsOn: 1 });
   const nextWeekStart = addWeeks(thisWeekStart, 1);
 
-  const [office, currentOrder, upcomingMenus, teamCount] = await Promise.all([
-    prisma.office.findUnique({
-      where: { id: officeId },
-      include: { subscription: true },
-    }),
-    prisma.order.findFirst({
-      where: {
-        officeId,
-        menu: { weekOf: { gte: thisWeekStart, lt: nextWeekStart } },
-      },
-      include: { menu: { include: { cuisineType: true } }, rsvps: true },
-    }),
-    prisma.menu.findMany({
-      where: { weekOf: { gte: thisWeekStart }, publishedAt: { not: null } },
-      include: { cuisineType: true, culturalCelebration: true },
-      orderBy: { weekOf: "asc" },
-      take: 3,
-    }),
-    prisma.user.count({ where: { officeId } }),
+  const [officeResult, orderResult, menusResult, teamResult] = await Promise.all([
+    supabase
+      .from("Office")
+      .select("*, Subscription(*)")
+      .eq("id", officeId)
+      .single(),
+    supabase
+      .from("Order")
+      .select(`
+        *,
+        Menu:menuId (weekOf, CuisineType:cuisineTypeId (name)),
+        RSVP (id)
+      `)
+      .eq("officeId", officeId)
+      .gte("Menu.weekOf", thisWeekStart.toISOString())
+      .lt("Menu.weekOf", nextWeekStart.toISOString())
+      .limit(1)
+      .single(),
+    supabase
+      .from("Menu")
+      .select("*, CuisineType:cuisineTypeId (name), CulturalCelebration:culturalCelebrationId (name)")
+      .gte("weekOf", thisWeekStart.toISOString())
+      .not("publishedAt", "is", null)
+      .order("weekOf", { ascending: true })
+      .limit(3),
+    supabase
+      .from("User")
+      .select("id", { count: "exact" })
+      .eq("officeId", officeId),
   ]);
 
-  return { office, currentOrder, upcomingMenus, teamCount };
+  return {
+    office: officeResult.data as Office | null,
+    currentOrder: orderResult.data as Order | null,
+    upcomingMenus: (menusResult.data || []) as Menu[],
+    teamCount: teamResult.count || 0,
+  };
 }
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
-  
+
   if (!session?.user?.officeId) {
     return (
       <div className="text-center py-12">
@@ -78,7 +118,7 @@ export default async function DashboardPage() {
             <div>
               <p className="text-sm text-gray-600">This Week</p>
               <p className="text-lg font-semibold">
-                {currentOrder ? currentOrder.menu.cuisineType.name : "No order"}
+                {currentOrder ? currentOrder.Menu?.CuisineType?.name : "No order"}
               </p>
             </div>
           </CardContent>
@@ -118,7 +158,7 @@ export default async function DashboardPage() {
             <div>
               <p className="text-sm text-gray-600">RSVPs</p>
               <p className="text-lg font-semibold">
-                {currentOrder?.rsvps.length || 0} / {teamCount}
+                {currentOrder?.RSVP?.length || 0} / {teamCount}
               </p>
             </div>
           </CardContent>
@@ -143,19 +183,19 @@ export default async function DashboardPage() {
               <div className="space-y-4">
                 <div>
                   <p className="text-sm text-gray-600">Cuisine</p>
-                  <p className="font-medium">{currentOrder.menu.cuisineType.name}</p>
+                  <p className="font-medium">{currentOrder.Menu?.CuisineType?.name}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Week of</p>
                   <p className="font-medium">
-                    {format(currentOrder.menu.weekOf, "MMMM d, yyyy")}
+                    {format(new Date(currentOrder.Menu?.weekOf), "MMMM d, yyyy")}
                   </p>
                 </div>
                 {currentOrder.rsvpDeadline && (
                   <div>
                     <p className="text-sm text-gray-600">RSVP Deadline</p>
                     <p className="font-medium">
-                      {format(currentOrder.rsvpDeadline, "MMMM d, yyyy 'at' h:mm a")}
+                      {format(new Date(currentOrder.rsvpDeadline), "MMMM d, yyyy 'at' h:mm a")}
                     </p>
                   </div>
                 )}
@@ -195,13 +235,13 @@ export default async function DashboardPage() {
                     className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                   >
                     <div>
-                      <p className="font-medium">{menu.cuisineType.name}</p>
+                      <p className="font-medium">{menu.CuisineType?.name}</p>
                       <p className="text-sm text-gray-600">
-                        Week of {format(menu.weekOf, "MMM d")}
+                        Week of {format(new Date(menu.weekOf), "MMM d")}
                       </p>
-                      {menu.culturalCelebration && (
+                      {menu.CulturalCelebration && (
                         <Badge variant="info" className="mt-1">
-                          {menu.culturalCelebration.name}
+                          {menu.CulturalCelebration.name}
                         </Badge>
                       )}
                     </div>
