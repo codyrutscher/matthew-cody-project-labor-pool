@@ -1,36 +1,44 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 import { z } from "zod";
 
 export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
-  const order = await prisma.order.findUnique({
-    where: { rsvpToken: token },
-    include: {
-      office: { select: { name: true } },
-      menu: {
-        include: {
-          cuisineType: true,
-          culturalCelebration: true,
-          items: { where: { available: true }, orderBy: { name: "asc" } },
-        },
-      },
-    },
-  });
+  const { data: order, error } = await supabase
+    .schema("catering")
+    .from("Order")
+    .select(`
+      id, status, rsvpDeadline,
+      Office:officeId (name),
+      Menu:menuId (
+        *,
+        CuisineType:cuisineTypeId (*),
+        CulturalCelebration:culturalCelebrationId (*),
+        MenuItem (*)
+      )
+    `)
+    .eq("rsvpToken", token)
+    .single();
 
-  if (!order) {
+  if (error || !order) {
     return NextResponse.json({ error: "Invalid RSVP link" }, { status: 404 });
+  }
+
+  // Filter available menu items
+  const menu = order.Menu as { MenuItem?: { available: boolean }[]; items?: { available: boolean }[] } | null;
+  if (menu && menu.MenuItem) {
+    menu.items = menu.MenuItem.filter((item: { available: boolean }) => item.available);
   }
 
   return NextResponse.json({
     id: order.id,
     status: order.status,
     rsvpDeadline: order.rsvpDeadline,
-    menu: order.menu,
-    office: order.office,
+    menu: order.Menu,
+    office: order.Office,
   });
 }
 
@@ -52,11 +60,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     return NextResponse.json({ error: "Please sign in to submit RSVP" }, { status: 401 });
   }
 
-  const order = await prisma.order.findUnique({
-    where: { rsvpToken: token },
-  });
+  const { data: order, error: orderError } = await supabase
+    .schema("catering")
+    .from("Order")
+    .select("id, status, rsvpDeadline")
+    .eq("rsvpToken", token)
+    .single();
 
-  if (!order) {
+  if (orderError || !order) {
     return NextResponse.json({ error: "Invalid RSVP link" }, { status: 404 });
   }
 
@@ -72,25 +83,49 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     const body = await req.json();
     const { selectedItems, dietaryNotes } = rsvpSchema.parse(body);
 
-    const rsvp = await prisma.rSVP.upsert({
-      where: {
-        orderId_userId: {
+    // Check if RSVP exists
+    const { data: existingRsvp } = await supabase
+      .schema("catering")
+      .from("RSVP")
+      .select("id")
+      .eq("orderId", order.id)
+      .eq("userId", session.user.id)
+      .single();
+
+    let rsvp;
+    if (existingRsvp) {
+      // Update existing RSVP
+      const { data, error } = await supabase
+        .schema("catering")
+        .from("RSVP")
+        .update({
+          selectedItems,
+          dietaryNotes,
+          submittedAt: new Date().toISOString(),
+        })
+        .eq("id", existingRsvp.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      rsvp = data;
+    } else {
+      // Create new RSVP
+      const { data, error } = await supabase
+        .schema("catering")
+        .from("RSVP")
+        .insert({
           orderId: order.id,
           userId: session.user.id,
-        },
-      },
-      update: {
-        selectedItems,
-        dietaryNotes,
-        submittedAt: new Date(),
-      },
-      create: {
-        orderId: order.id,
-        userId: session.user.id,
-        selectedItems,
-        dietaryNotes,
-      },
-    });
+          selectedItems,
+          dietaryNotes,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      rsvp = data;
+    }
 
     return NextResponse.json(rsvp);
   } catch (error) {

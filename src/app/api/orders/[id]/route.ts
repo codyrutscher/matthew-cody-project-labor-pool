@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 import { z } from "zod";
 
 const updateOrderSchema = z.object({
@@ -17,16 +17,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const order = await prisma.order.findFirst({
-    where: { id, officeId: session.user.officeId },
-    include: {
-      menu: { include: { cuisineType: true } },
-      items: true,
-      rsvps: { include: { user: { select: { name: true, email: true } } } },
-    },
-  });
+  const { data: order, error } = await supabase
+    .schema("catering")
+    .from("Order")
+    .select(`
+      *,
+      Menu:menuId (*, CuisineType:cuisineTypeId (*)),
+      OrderItem (*),
+      RSVP (*, User:userId (name, email))
+    `)
+    .eq("id", id)
+    .eq("officeId", session.user.officeId)
+    .single();
 
-  if (!order) {
+  if (error || !order) {
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
@@ -45,15 +49,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const body = await req.json();
     const data = updateOrderSchema.parse(body);
 
-    const order = await prisma.order.updateMany({
-      where: { id, officeId: session.user.officeId },
-      data: {
-        ...(data.status && { status: data.status }),
-        ...(data.rsvpDeadline && { rsvpDeadline: new Date(data.rsvpDeadline) }),
-      },
-    });
+    const updateData: Record<string, unknown> = {};
+    if (data.status) updateData.status = data.status;
+    if (data.rsvpDeadline) updateData.rsvpDeadline = data.rsvpDeadline;
 
-    if (order.count === 0) {
+    const { data: order, error } = await supabase
+      .schema("catering")
+      .from("Order")
+      .update(updateData)
+      .eq("id", id)
+      .eq("officeId", session.user.officeId)
+      .select()
+      .single();
+
+    if (error || !order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 

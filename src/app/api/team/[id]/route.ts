@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -16,11 +16,16 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     return NextResponse.json({ error: "Cannot remove yourself" }, { status: 400 });
   }
 
-  const user = await prisma.user.findFirst({
-    where: { id, officeId: session.user.officeId },
-  });
+  // Get user to check role
+  const { data: user, error: findError } = await supabase
+    .schema("catering")
+    .from("User")
+    .select("id, role")
+    .eq("id", id)
+    .eq("officeId", session.user.officeId)
+    .single();
 
-  if (!user) {
+  if (findError || !user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
@@ -29,7 +34,16 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     return NextResponse.json({ error: "Cannot remove managers" }, { status: 400 });
   }
 
-  await prisma.user.delete({ where: { id } });
+  const { error: deleteError } = await supabase
+    .schema("catering")
+    .from("User")
+    .delete()
+    .eq("id", id);
+
+  if (deleteError) {
+    console.error("Delete user error:", deleteError);
+    return NextResponse.json({ error: "Failed to remove user" }, { status: 500 });
+  }
 
   return NextResponse.json({ success: true });
 }

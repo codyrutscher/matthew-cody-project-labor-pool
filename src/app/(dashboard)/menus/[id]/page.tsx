@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,15 +7,42 @@ import { format } from "date-fns";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
+interface MenuItem {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  available: boolean;
+  dietaryTags: string[];
+}
+
+interface Menu {
+  id: string;
+  weekOf: string;
+  CuisineType: { id: string; name: string };
+  CulturalCelebration: { id: string; name: string } | null;
+  MenuItem: MenuItem[];
+}
+
 async function getMenu(id: string) {
-  return prisma.menu.findUnique({
-    where: { id },
-    include: {
-      cuisineType: true,
-      culturalCelebration: true,
-      items: { where: { available: true }, orderBy: { name: "asc" } },
-    },
-  });
+  const { data: menu, error } = await supabase
+    .schema("catering")
+    .from("Menu")
+    .select(`
+      *,
+      CuisineType:cuisineTypeId (*),
+      CulturalCelebration:culturalCelebrationId (*),
+      MenuItem (*)
+    `)
+    .eq("id", id)
+    .single();
+
+  if (error) {
+    console.error("Get menu error:", error);
+    return null;
+  }
+
+  return menu as Menu;
 }
 
 export default async function MenuDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -25,6 +52,8 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
   if (!menu) {
     notFound();
   }
+
+  const availableItems = menu.MenuItem?.filter((item) => item.available) || [];
 
   const dietaryColors: Record<string, string> = {
     vegetarian: "bg-green-100 text-green-800",
@@ -47,11 +76,11 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
 
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{menu.cuisineType.name}</h1>
-          <p className="text-gray-600">Week of {format(menu.weekOf, "MMMM d, yyyy")}</p>
-          {menu.culturalCelebration && (
+          <h1 className="text-2xl font-bold text-gray-900">{menu.CuisineType?.name}</h1>
+          <p className="text-gray-600">Week of {format(new Date(menu.weekOf), "MMMM d, yyyy")}</p>
+          {menu.CulturalCelebration && (
             <Badge variant="info" className="mt-2">
-              🎉 {menu.culturalCelebration.name}
+              🎉 {menu.CulturalCelebration.name}
             </Badge>
           )}
         </div>
@@ -61,7 +90,7 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {menu.items.map((item) => (
+        {availableItems.map((item) => (
           <Card key={item.id}>
             <CardHeader className="pb-2">
               <div className="flex items-start justify-between">
@@ -75,7 +104,7 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
               {item.description && (
                 <p className="text-sm text-gray-600 mb-3">{item.description}</p>
               )}
-              {item.dietaryTags.length > 0 && (
+              {item.dietaryTags && item.dietaryTags.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {item.dietaryTags.map((tag) => (
                     <span
@@ -94,7 +123,7 @@ export default async function MenuDetailPage({ params }: { params: Promise<{ id:
         ))}
       </div>
 
-      {menu.items.length === 0 && (
+      {availableItems.length === 0 && (
         <Card>
           <CardContent className="text-center py-12">
             <p className="text-gray-600">No items available for this menu yet.</p>

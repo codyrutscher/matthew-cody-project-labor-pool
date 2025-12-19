@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 import { z } from "zod";
 
 export async function GET() {
@@ -11,10 +11,17 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const office = await prisma.office.findUnique({
-    where: { id: session.user.officeId },
-    include: { subscription: true },
-  });
+  const { data: office, error } = await supabase
+    .schema("catering")
+    .from("Office")
+    .select("*, Subscription(*)")
+    .eq("id", session.user.officeId)
+    .single();
+
+  if (error) {
+    console.error("Get office error:", error);
+    return NextResponse.json({ error: "Failed to get office" }, { status: 500 });
+  }
 
   return NextResponse.json(office);
 }
@@ -38,10 +45,18 @@ export async function PATCH(req: Request) {
     const body = await req.json();
     const data = updateOfficeSchema.parse(body);
 
-    const office = await prisma.office.update({
-      where: { id: session.user.officeId },
-      data,
-    });
+    const { data: office, error } = await supabase
+      .schema("catering")
+      .from("Office")
+      .update(data)
+      .eq("id", session.user.officeId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Update office error:", error);
+      return NextResponse.json({ error: "Failed to update office" }, { status: 500 });
+    }
 
     return NextResponse.json(office);
   } catch (error) {

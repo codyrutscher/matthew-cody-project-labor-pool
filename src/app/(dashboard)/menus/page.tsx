@@ -1,26 +1,57 @@
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { format, startOfWeek } from "date-fns";
 import Link from "next/link";
 
+interface MenuItem {
+  id: string;
+  name: string;
+}
+
+interface CuisineType {
+  id: string;
+  name: string;
+}
+
+interface CulturalCelebration {
+  id: string;
+  name: string;
+}
+
+interface Menu {
+  id: string;
+  weekOf: string;
+  publishedAt: string | null;
+  CuisineType: CuisineType;
+  CulturalCelebration: CulturalCelebration | null;
+  MenuItem: MenuItem[];
+}
+
 async function getMenus() {
   const now = new Date();
   const thisWeekStart = startOfWeek(now, { weekStartsOn: 1 });
 
-  return prisma.menu.findMany({
-    where: {
-      weekOf: { gte: thisWeekStart },
-      publishedAt: { not: null },
-    },
-    include: {
-      cuisineType: true,
-      culturalCelebration: true,
-      items: true,
-    },
-    orderBy: { weekOf: "asc" },
-  });
+  const { data: menus, error } = await supabase
+    .schema("catering")
+    .from("Menu")
+    .select(`
+      *,
+      CuisineType:cuisineTypeId (*),
+      CulturalCelebration:culturalCelebrationId (*),
+      MenuItem (*)
+    `)
+    .gte("weekOf", thisWeekStart.toISOString())
+    .not("publishedAt", "is", null)
+    .order("weekOf", { ascending: true });
+
+  if (error) {
+    console.error("Get menus error:", error);
+    return [];
+  }
+
+  return menus as Menu[];
 }
 
 export default async function MenusPage() {
@@ -43,21 +74,21 @@ export default async function MenusPage() {
               <CardContent className="p-4">
                 <div className="flex items-start justify-between mb-2">
                   <div>
-                    <h3 className="font-semibold text-lg">{menu.cuisineType.name}</h3>
+                    <h3 className="font-semibold text-lg">{menu.CuisineType?.name}</h3>
                     <p className="text-sm text-gray-600">
-                      Week of {format(menu.weekOf, "MMMM d, yyyy")}
+                      Week of {format(new Date(menu.weekOf), "MMMM d, yyyy")}
                     </p>
                   </div>
                 </div>
 
-                {menu.culturalCelebration && (
+                {menu.CulturalCelebration && (
                   <Badge variant="info" className="mb-3">
-                    🎉 {menu.culturalCelebration.name}
+                    🎉 {menu.CulturalCelebration.name}
                   </Badge>
                 )}
 
                 <p className="text-sm text-gray-600 mb-4">
-                  {menu.items.length} items available
+                  {menu.MenuItem?.length || 0} items available
                 </p>
 
                 <div className="flex gap-2">

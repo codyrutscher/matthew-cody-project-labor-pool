@@ -1,21 +1,30 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  
-  const menu = await prisma.menu.findUnique({
-    where: { id },
-    include: {
-      cuisineType: true,
-      culturalCelebration: true,
-      items: { where: { available: true }, orderBy: { name: "asc" } },
-    },
-  });
 
-  if (!menu) {
+  const { data: menu, error } = await supabase
+    .schema("catering")
+    .from("Menu")
+    .select(`
+      *,
+      CuisineType:cuisineTypeId (*),
+      CulturalCelebration:culturalCelebrationId (*),
+      MenuItem (*)
+    `)
+    .eq("id", id)
+    .single();
+
+  if (error || !menu) {
     return NextResponse.json({ error: "Menu not found" }, { status: 404 });
   }
 
-  return NextResponse.json(menu);
+  // Filter available items
+  const availableItems = menu.MenuItem?.filter((item: { available: boolean }) => item.available) || [];
+  
+  return NextResponse.json({
+    ...menu,
+    items: availableItems,
+  });
 }

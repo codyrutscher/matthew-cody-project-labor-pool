@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
@@ -13,11 +13,17 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const members = await prisma.user.findMany({
-    where: { officeId: session.user.officeId },
-    select: { id: true, name: true, email: true, role: true },
-    orderBy: { createdAt: "asc" },
-  });
+  const { data: members, error } = await supabase
+    .schema("catering")
+    .from("User")
+    .select("id, name, email, role")
+    .eq("officeId", session.user.officeId)
+    .order("createdAt", { ascending: true });
+
+  if (error) {
+    console.error("Get team error:", error);
+    return NextResponse.json({ error: "Failed to get team" }, { status: 500 });
+  }
 
   return NextResponse.json(members);
 }
@@ -37,7 +43,14 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { email } = inviteSchema.parse(body);
 
-    const existing = await prisma.user.findUnique({ where: { email } });
+    // Check if user exists
+    const { data: existing } = await supabase
+      .schema("catering")
+      .from("User")
+      .select("id")
+      .eq("email", email)
+      .single();
+
     if (existing) {
       return NextResponse.json({ error: "User already exists" }, { status: 400 });
     }
@@ -46,18 +59,26 @@ export async function POST(req: Request) {
     const tempPassword = randomBytes(16).toString("hex");
     const hashedPassword = await bcrypt.hash(tempPassword, 12);
 
-    const user = await prisma.user.create({
-      data: {
+    const { data: user, error } = await supabase
+      .schema("catering")
+      .from("User")
+      .insert({
         email,
         password: hashedPassword,
         role: "STAFF",
         officeId: session.user.officeId,
-      },
-    });
+      })
+      .select("id, email")
+      .single();
+
+    if (error) {
+      console.error("Invite error:", error);
+      return NextResponse.json({ error: "Failed to invite user" }, { status: 500 });
+    }
 
     // TODO: Send invite email with password reset link
 
-    return NextResponse.json({ id: user.id, email: user.email });
+    return NextResponse.json(user);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid email" }, { status: 400 });

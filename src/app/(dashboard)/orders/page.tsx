@@ -1,22 +1,44 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import Link from "next/link";
 
+interface Order {
+  id: string;
+  status: string;
+  totalCost: number | null;
+  createdAt: string;
+  Menu: {
+    weekOf: string;
+    CuisineType: { name: string };
+  };
+  RSVP: { id: string }[];
+  OrderItem: { id: string }[];
+}
+
 async function getOrders(officeId: string) {
-  return prisma.order.findMany({
-    where: { officeId },
-    include: {
-      menu: { include: { cuisineType: true } },
-      rsvps: true,
-      items: true,
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  const { data: orders, error } = await supabase
+    .schema("catering")
+    .from("Order")
+    .select(`
+      *,
+      Menu:menuId (weekOf, CuisineType:cuisineTypeId (name)),
+      RSVP (*),
+      OrderItem (*)
+    `)
+    .eq("officeId", officeId)
+    .order("createdAt", { ascending: false });
+
+  if (error) {
+    console.error("Get orders error:", error);
+    return [];
+  }
+
+  return orders as Order[];
 }
 
 export default async function OrdersPage() {
@@ -59,16 +81,16 @@ export default async function OrdersPage() {
                       <span className="text-2xl">🍽️</span>
                     </div>
                     <div>
-                      <h3 className="font-semibold">{order.menu.cuisineType.name}</h3>
+                      <h3 className="font-semibold">{order.Menu?.CuisineType?.name}</h3>
                       <p className="text-sm text-gray-600">
-                        Week of {format(order.menu.weekOf, "MMMM d, yyyy")}
+                        Week of {format(new Date(order.Menu?.weekOf), "MMMM d, yyyy")}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
                         <Badge variant={statusColors[order.status]}>
                           {order.status.replace("_", " ")}
                         </Badge>
                         <span className="text-sm text-gray-500">
-                          {order.rsvps.length} RSVPs
+                          {order.RSVP?.length || 0} RSVPs
                         </span>
                         {order.totalCost && (
                           <span className="text-sm font-medium text-gray-700">
