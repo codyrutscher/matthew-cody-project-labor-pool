@@ -3,12 +3,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { z } from "zod";
+import { randomUUID } from "crypto";
 
 export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
   const { data: order, error } = await supabase
-    .schema("catering")
+    
     .from("Order")
     .select(`
       id, status, rsvpDeadline,
@@ -61,7 +62,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   }
 
   const { data: order, error: orderError } = await supabase
-    .schema("catering")
+    
     .from("Order")
     .select("id, status, rsvpDeadline")
     .eq("rsvpToken", token)
@@ -85,7 +86,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
 
     // Check if RSVP exists
     const { data: existingRsvp } = await supabase
-      .schema("catering")
+      
       .from("RSVP")
       .select("id")
       .eq("orderId", order.id)
@@ -96,7 +97,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     if (existingRsvp) {
       // Update existing RSVP
       const { data, error } = await supabase
-        .schema("catering")
+        
         .from("RSVP")
         .update({
           selectedItems,
@@ -112,9 +113,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     } else {
       // Create new RSVP
       const { data, error } = await supabase
-        .schema("catering")
         .from("RSVP")
         .insert({
+          id: randomUUID(),
           orderId: order.id,
           userId: session.user.id,
           selectedItems,

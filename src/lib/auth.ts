@@ -17,7 +17,6 @@ export const authOptions: NextAuthOptions = {
         }
 
         const { data: user, error } = await supabase
-          .schema("catering")
           .from("User")
           .select("*")
           .eq("email", credentials.email)

@@ -26,7 +26,7 @@ interface Menu {
 
 async function getMenu(id: string) {
   const { data: menu, error } = await supabase
-    .schema("catering")
+    
     .from("Menu")
     .select(`
       *,

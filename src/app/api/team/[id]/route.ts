@@ -18,7 +18,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   // Get user to check role
   const { data: user, error: findError } = await supabase
-    .schema("catering")
+    
     .from("User")
     .select("id, role")
     .eq("id", id)
@@ -35,7 +35,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   }
 
   const { error: deleteError } = await supabase
-    .schema("catering")
+    
     .from("User")
     .delete()
     .eq("id", id);

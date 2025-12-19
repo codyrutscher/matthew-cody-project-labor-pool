@@ -5,7 +5,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { id } = await params;
 
   const { data: menu, error } = await supabase
-    .schema("catering")
+    
     .from("Menu")
     .select(`
       *,

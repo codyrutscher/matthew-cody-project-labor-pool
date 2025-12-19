@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { randomUUID } from "crypto";
 
 const registerSchema = z.object({
   name: z.string().min(1),
@@ -17,7 +18,6 @@ export async function POST(req: Request) {
 
     // Check if user exists
     const { data: existingUser } = await supabase
-      .schema("catering")
       .from("User")
       .select("id")
       .eq("email", email)
@@ -28,12 +28,14 @@ export async function POST(req: Request) {
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
+    const officeId = randomUUID();
+    const userId = randomUUID();
 
     // Create office
     const { data: office, error: officeError } = await supabase
-      .schema("catering")
       .from("Office")
       .insert({
+        id: officeId,
         name: officeName,
         timezone: "America/New_York",
       })
@@ -47,9 +49,9 @@ export async function POST(req: Request) {
 
     // Create user
     const { data: user, error: userError } = await supabase
-      .schema("catering")
       .from("User")
       .insert({
+        id: userId,
         name,
         email,
         password: hashedPassword,
@@ -62,7 +64,7 @@ export async function POST(req: Request) {
     if (userError) {
       console.error("User creation error:", userError);
       // Rollback office creation
-      await supabase.schema("catering").from("Office").delete().eq("id", office.id);
+      await supabase.from("Office").delete().eq("id", office.id);
       return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
     }
 

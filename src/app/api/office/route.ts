@@ -12,7 +12,7 @@ export async function GET() {
   }
 
   const { data: office, error } = await supabase
-    .schema("catering")
+    
     .from("Office")
     .select("*, Subscription(*)")
     .eq("id", session.user.officeId)
@@ -46,7 +46,7 @@ export async function PATCH(req: Request) {
     const data = updateOfficeSchema.parse(body);
 
     const { data: office, error } = await supabase
-      .schema("catering")
+      
       .from("Office")
       .update(data)
       .eq("id", session.user.officeId)

@@ -34,7 +34,7 @@ async function getMenus() {
   const thisWeekStart = startOfWeek(now, { weekStartsOn: 1 });
 
   const { data: menus, error } = await supabase
-    .schema("catering")
+    
     .from("Menu")
     .select(`
       *,

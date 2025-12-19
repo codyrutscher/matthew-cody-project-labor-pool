@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { z } from "zod";
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 
 const createOrderSchema = z.object({
   menuId: z.string(),
@@ -30,12 +30,13 @@ export async function POST(req: Request) {
 
     const totalCost = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const rsvpToken = randomBytes(32).toString("hex");
+    const orderId = randomUUID();
 
     // Create order
     const { data: order, error: orderError } = await supabase
-      .schema("catering")
       .from("Order")
       .insert({
+        id: orderId,
         officeId: session.user.officeId,
         menuId,
         totalCost,
@@ -52,6 +53,7 @@ export async function POST(req: Request) {
 
     // Create order items
     const orderItems = items.map((item) => ({
+      id: randomUUID(),
       orderId: order.id,
       menuItemId: item.menuItemId,
       name: item.name,
@@ -60,7 +62,7 @@ export async function POST(req: Request) {
     }));
 
     const { data: createdItems, error: itemsError } = await supabase
-      .schema("catering")
+      
       .from("OrderItem")
       .insert(orderItems)
       .select();
@@ -68,7 +70,7 @@ export async function POST(req: Request) {
     if (itemsError) {
       console.error("Create order items error:", itemsError);
       // Rollback order
-      await supabase.schema("catering").from("Order").delete().eq("id", order.id);
+      await supabase.from("Order").delete().eq("id", order.id);
       return NextResponse.json({ error: "Failed to create order items" }, { status: 500 });
     }
 
@@ -90,7 +92,7 @@ export async function GET() {
   }
 
   const { data: orders, error } = await supabase
-    .schema("catering")
+    
     .from("Order")
     .select(`
       *,

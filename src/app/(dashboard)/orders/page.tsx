@@ -22,7 +22,7 @@ interface Order {
 
 async function getOrders(officeId: string) {
   const { data: orders, error } = await supabase
-    .schema("catering")
+    
     .from("Order")
     .select(`
       *,

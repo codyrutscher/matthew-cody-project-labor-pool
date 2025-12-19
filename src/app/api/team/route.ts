@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -14,7 +14,7 @@ export async function GET() {
   }
 
   const { data: members, error } = await supabase
-    .schema("catering")
+    
     .from("User")
     .select("id, name, email, role")
     .eq("officeId", session.user.officeId)
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
 
     // Check if user exists
     const { data: existing } = await supabase
-      .schema("catering")
+      
       .from("User")
       .select("id")
       .eq("email", email)
@@ -60,9 +60,9 @@ export async function POST(req: Request) {
     const hashedPassword = await bcrypt.hash(tempPassword, 12);
 
     const { data: user, error } = await supabase
-      .schema("catering")
       .from("User")
       .insert({
+        id: randomUUID(),
         email,
         password: hashedPassword,
         role: "STAFF",

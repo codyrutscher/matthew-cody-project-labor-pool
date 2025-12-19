@@ -18,7 +18,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   }
 
   const { data: order, error } = await supabase
-    .schema("catering")
+    
     .from("Order")
     .select(`
       *,
@@ -54,7 +54,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (data.rsvpDeadline) updateData.rsvpDeadline = data.rsvpDeadline;
 
     const { data: order, error } = await supabase
-      .schema("catering")
+      
       .from("Order")
       .update(updateData)
       .eq("id", id)
