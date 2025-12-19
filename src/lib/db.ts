@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaNeon } from "@prisma/adapter-neon";
-import { Pool } from "@neondatabase/serverless";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
 
@@ -9,9 +9,14 @@ function createPrismaClient(): PrismaClient {
   if (!connectionString) {
     throw new Error("DATABASE_URL environment variable is not set");
   }
-  const pool = new Pool({ connectionString });
-  // @ts-expect-error - PrismaNeon types are not fully compatible
-  const adapter = new PrismaNeon(pool);
+  
+  const pool = new Pool({ 
+    connectionString,
+    max: 1,
+    ssl: { rejectUnauthorized: false }
+  });
+  
+  const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 }
 
